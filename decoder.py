@@ -159,7 +159,6 @@ def best_decode(iterations):
     for i in range(iterations):
         best[i] = decode(to_decode)
     sort_it = sorted(best, key=lambda x: x[0], reverse=True)
-    print "high score:", sort_it[0][0]
     return sort_it[0][1]
     
 print "Decoding the text... this may take a minute:\n\n", best_decode(3)
