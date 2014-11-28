@@ -24,10 +24,10 @@ to_decode = re.sub('[\W_]+', '', original_decode)
 def collect_quadgrams(string):    
     """
     Returns a dictionary of all quadgrams in 
-    the input string with their respective counts.
+    the input string with their respective frequencies.
     """
-    new_string = re.sub('[\W_]+', '', string)   # Remove spaces
-    tokens = list(new_string)
+    string = re.sub('[\W_]+', '', string)   # Remove spaces
+    tokens = list(string)
     tokens_length = len(tokens)
     quadgrams = []
     first, second, third, fourth = 0, 1, 2, 3
@@ -44,28 +44,29 @@ def collect_quadgrams(string):
 
 def put_spaces_back(input_string):
     """
-    After the text is decoded, this function will apply 
-    spaces to match the spacing of the encrypted text
+    After the text is decoded, this function will apply spaces
+    and returns to match the formatting of the encrypted text
     """
     idx = 0
     space_positions = []
+    # Find positions of spaces and returns in original string
     for char in original_decode:
         if char == " ":
             space_positions.append(('space', idx))
         elif char == '\n':
             space_positions.append(('return', idx))
         idx += 1
-
+    # Turn string into a list of chars
     str_list = []
     for char in input_string:
-        str_list.append(char)
-        
+        str_list.append(char)   
+    # Insert spaces and returns at the indices noted in space_positions
     for pos in space_positions:
         if pos[0] == 'space':
             str_list.insert(pos[1], ' ')
         else:
             str_list.insert(pos[1], '\n')
-    
+    # Turn list back to a string
     output = ''
     for item in str_list:
         output += item
@@ -73,6 +74,9 @@ def put_spaces_back(input_string):
     return output
 
 def generate_key():
+    """
+    Generates the alphabet in a random order
+    """
     alphabet = 'abcdefghijklmnopqrstuvwxyz'
     key = list(alphabet)
     random.shuffle(key)    
@@ -83,18 +87,15 @@ def decode(encoded):
     Scores a decryption, then swaps two keys' values, 
     scores the new decryption, and compares the two scores.
     The best score is always remembered. This continues until
-    the best score does not change after 2000 attempts in a row.
+    the best score does not change after 1000 attempts in a row.
     """
     # Initialize variables
     quadgram_scores = json.load(open('quad_scores.json'))
     alphabet = 'abcdefghijklmnopqrstuvwxyz'
     key = generate_key()
-    best_guess = ''
     high_score = float('-Inf')
     decode_dict = {}
-    best_decode = ''
     no_improvement = 0
-    iteration = 0
     
     # Set up seed decryption
     for i in range(26):
@@ -103,17 +104,16 @@ def decode(encoded):
         
     # Main loop
     while no_improvement < 1000:
-        iteration += 1
         decoded = ''
         score = 0
         
+        # Build decrypted string
         for letter in to_decode:
             if letter in decode_dict:
                 decoded += decode_dict[letter]
                         
-        # Score the current key
-        decoded_quadgrams = collect_quadgrams(decoded)
-        
+        # Score the current decrypted string
+        decoded_quadgrams = collect_quadgrams(decoded) 
         for quadgram in decoded_quadgrams:
             if quadgram in quadgram_scores:
                 score += quadgram_scores[quadgram]
@@ -124,22 +124,17 @@ def decode(encoded):
             high_score = score
             no_improvement = 0
             best_decode_dict = copy.copy(decode_dict)
-            best_decode = decoded            
-            sort_it = sorted(decode_dict.items(), key=lambda x: x[0])
-            best_guess = ''
-            for value in sort_it:
-                best_guess += value[1]
-                
-            # shuffle dictionary
+            best_decode = decoded
+            # Shuffle key
             a, b = random.choice(decode_dict.keys()), random.choice(decode_dict.keys())
             a_value, b_value = decode_dict[a], decode_dict[b]
             decode_dict[a] = b_value
             decode_dict[b] = a_value 
             
         else:
-            # return to better key
+            # Return to a better key
             decode_dict = copy.copy(best_decode_dict)
-            # shuffle dictionary
+            # Shuffle key
             no_improvement += 1
             a, b = random.choice(decode_dict.keys()), random.choice(decode_dict.keys())
             a_value, b_value = decode_dict[a], decode_dict[b]
@@ -161,4 +156,4 @@ def best_decode(iterations):
     sort_it = sorted(best, key=lambda x: x[0], reverse=True)
     return sort_it[0][1]
     
-print "Decoding the text... this may take a minute:\n\n", best_decode(3)
+print "Decoding the text... this may take a minute:\n\n", best_decode(1)
