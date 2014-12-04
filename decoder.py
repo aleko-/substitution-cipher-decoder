@@ -1,32 +1,32 @@
 import re
 import random
-from collections import defaultdict
 import json
-import copy
 import sys
+import time
+from count_frequencies import count
 
 if len(sys.argv) < 2:
-    print "Please add the name of the encrypted file and try again"
+    print "Add the name of the encrypted file and try again"
     sys.exit()
 elif len(sys.argv) > 2:
     print "Too many arguments used. Try again."
     sys.exit()
-    
-f = open(sys.argv[1], 'r')
-original_decode = ''
-for char in f.read():
-    original_decode += char.lower()
-f.close()
-# Can take input text with all characters, but only preserves spacing and returns
-original_decode = re.sub('[^a-zA-Z\s]+', '', original_decode)
-to_decode = re.sub('[\W_]+', '', original_decode)
+
+# Read in and preprocess text of the encrypted file
+# Store original_decode to remember spacing and returns
+original_encrypt = ''
+with open(sys.argv[1], 'r') as f:
+    for line in f:
+        for char in line:
+            original_encrypt += char.lower()
+original_encrypt = re.sub('[^a-zA-Z\s]+', '', original_encrypt)
+to_decode = re.sub('[^a-zA-Z]+', '', original_encrypt)
 
 def collect_quadgrams(string):    
     """
-    Returns a dictionary of all quadgrams in 
-    the input string with their respective frequencies.
+    Returns a list of all quadgrams in the 
+    input string with their respective frequencies.
     """
-    string = re.sub('[\W_]+', '', string)   # Remove spaces
     tokens = list(string)
     tokens_length = len(tokens)
     quadgrams = []
@@ -50,7 +50,7 @@ def put_spaces_back(input_string):
     idx = 0
     space_positions = []
     # Find positions of spaces and returns in original string
-    for char in original_decode:
+    for char in original_encrypt:
         if char == " ":
             space_positions.append(('space', idx))
         elif char == '\n':
@@ -73,45 +73,49 @@ def put_spaces_back(input_string):
         
     return output
 
-def generate_key():
+def generate_key(input_dict):
     """
-    Generates the alphabet in a random order
+    Generates the alphabet in descending 
+    order of the input text's frequency
     """
+    freq_list = sorted(input_dict.items(), key=lambda x: x[1], reverse=True)
+    key = ''
+    for item in freq_list:
+        key += str(item[0])
+    # Account for text that doesn't include all 26 letters
     alphabet = 'abcdefghijklmnopqrstuvwxyz'
-    key = list(alphabet)
-    random.shuffle(key)    
-    return "".join(key)
+    for char in alphabet:
+        if char not in key:
+            key += char
+    return key
   
 def decode(encoded):
     """
-    Scores a decryption, then swaps two keys' values, 
-    scores the new decryption, and compares the two scores.
+    Scores a decryption, then swaps two item values in the decode 
+    key, scores the new decryption, and compares the two scores.
     The best score is always remembered. This continues until
     the best score does not change after 1000 attempts in a row.
     """
     # Initialize variables
     quadgram_scores = json.load(open('quad_scores.json'))
-    alphabet = 'abcdefghijklmnopqrstuvwxyz'
-    key = generate_key()
+    alphabet = 'etaoinsrhldcumfpgywbvkjxzq' # Descending order of expected frequency in English.
+    key = generate_key(count(sys.argv[1]))
     high_score = float('-Inf')
     decode_dict = {}
     no_improvement = 0
-    
     # Set up seed decryption
     for i in range(26):
-        decode_dict[alphabet[i]] = key[i]
+        decode_dict[key[i]] = alphabet[i]
         i += 1     
-        
     # Main loop
     while no_improvement < 1000:
         decoded = ''
         score = 0
-        
         # Build decrypted string
         for letter in to_decode:
             if letter in decode_dict:
-                decoded += decode_dict[letter]
-                        
+                decoded += decode_dict[letter]       
+                           
         # Score the current decrypted string
         decoded_quadgrams = collect_quadgrams(decoded) 
         for quadgram in decoded_quadgrams:
@@ -122,24 +126,19 @@ def decode(encoded):
 
         if score > high_score:
             high_score = score
-            no_improvement = 0
-            best_decode_dict = copy.copy(decode_dict)
+            best_decode_dict = decode_dict.copy()
             best_decode = decoded
-            # Shuffle key
-            a, b = random.choice(decode_dict.keys()), random.choice(decode_dict.keys())
-            a_value, b_value = decode_dict[a], decode_dict[b]
-            decode_dict[a] = b_value
-            decode_dict[b] = a_value 
-            
+            no_improvement = 0
         else:
-            # Return to a better key
-            decode_dict = copy.copy(best_decode_dict)
-            # Shuffle key
             no_improvement += 1
-            a, b = random.choice(decode_dict.keys()), random.choice(decode_dict.keys())
-            a_value, b_value = decode_dict[a], decode_dict[b]
-            decode_dict[a] = b_value
-            decode_dict[b] = a_value
+            # Return to a better key
+            decode_dict = best_decode_dict.copy()
+
+        # Shuffle key
+        a, b = random.choice(decode_dict.keys()), random.choice(decode_dict.keys())
+        a_value, b_value = decode_dict[a], decode_dict[b]
+        decode_dict[a] = b_value
+        decode_dict[b] = a_value
         
     return high_score, put_spaces_back(best_decode)
 
@@ -148,12 +147,17 @@ def best_decode(iterations):
     Runs decode() for specified number of iterations and
     returns the decoded text with the highest score. This
     function is useful to avoiding getting stuck in a local
-    optimum that returns the wrong decoded text.
+    optimum that returns the wrong decrypted text.
     """
-    best = [() for x in range(iterations)]
+    best = [() for _ in range(iterations)]
     for i in range(iterations):
         best[i] = decode(to_decode)
+        print "Iteration #%s \nbest score: %s \nPreview: %s" %(i+1, best[i][0], best[i][1][:100])
+        print
     sort_it = sorted(best, key=lambda x: x[0], reverse=True)
+    time.sleep(2)   # Better on the eyes
+    print "Decoded text:"
+    print
     return sort_it[0][1]
-    
-print "Decoding the text... this may take a minute:\n\n", best_decode(1)
+
+print "Decoding the text...\n\n", best_decode(3)
